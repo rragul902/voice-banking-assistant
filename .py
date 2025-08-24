@@ -3,6 +3,7 @@ import time
 import random
 import re
 from datetime import datetime
+from difflib import get_close_matches
 
 # Page config
 st.set_page_config(
@@ -29,41 +30,44 @@ BENEFICIARIES = {
     "sarah": "sarah@upi"
 }
 
+# Function: Fuzzy recipient match
+def get_recipient(name):
+    matches = get_close_matches(name.lower(), BENEFICIARIES.keys(), n=1, cutoff=0.6)
+    return matches[0] if matches else None
+
+# Function: Extract amount and recipient
 def extract_amount_and_recipient(text):
-    """Extract amount and recipient from voice command"""
     text = text.lower().strip()
     
     # Extract amount
     amount_match = re.search(r'\b(\d+(?:\.\d+)?)\b', text)
     amount = float(amount_match.group(1)) if amount_match else None
     
-    # Extract recipient name
+    # Extract recipient
     recipient = None
     for name in BENEFICIARIES.keys():
         if name in text:
             recipient = name
             break
-    
     if not recipient:
         words = text.split()
-        trigger_words = ["to", "pay", "send"]
+        trigger_words = ["to", "pay", "send", "transfer"]
         for i, word in enumerate(words):
             if word in trigger_words and i + 1 < len(words):
                 potential_recipient = " ".join(words[i+1:i+3]).strip()
-                if potential_recipient:
-                    recipient = potential_recipient
+                recipient = get_recipient(potential_recipient)
                 break
     
     return amount, recipient
 
+# Function: Simulate voice verification
 def simulate_voice_verification():
-    """Simulate voice biometric verification"""
     time.sleep(1)
     verification_score = random.uniform(0.85, 0.98)
     return verification_score > 0.82, verification_score
 
+# Function: Process voice commands
 def process_voice_command(command):
-    """Process voice commands"""
     command = command.lower().strip()
     
     if not command:
@@ -77,7 +81,7 @@ def process_voice_command(command):
     if any(word in command for word in ["history", "transactions"]):
         if st.session_state.transactions:
             history_text = "📋 Recent Transactions:\n\n"
-            for txn in st.session_state.transactions[-3:]:
+            for txn in st.session_state.transactions[-5:]:
                 history_text += f"• ₹{txn['amount']:,.2f} to {txn['recipient']} - {txn['status']}\n"
             return history_text
         else:
@@ -89,16 +93,12 @@ def process_voice_command(command):
         
         if not amount:
             return "❌ Please specify the amount."
-        
         if not recipient:
             return "❌ Please specify the recipient."
-        
         if amount <= 0:
             return "❌ Amount must be greater than zero."
-        
         if amount > 50000:
             return "❌ Maximum transaction limit is ₹50,000."
-        
         if amount > st.session_state.balance:
             return f"❌ Insufficient balance. Current: ₹{st.session_state.balance:,.2f}"
         
@@ -106,16 +106,14 @@ def process_voice_command(command):
         if not recipient_upi:
             return f"❌ Recipient '{recipient}' not found."
         
-        # Voice verification simulation
+        # Voice verification
         is_verified, score = simulate_voice_verification()
-        
         if not is_verified:
             return f"❌ Voice verification failed. Score: {score:.2f}"
         
         # Process transaction
         transaction_id = f"TXN{int(time.time())}{random.randint(100, 999)}"
         st.session_state.balance -= amount
-        
         transaction = {
             "id": transaction_id,
             "amount": amount,
@@ -123,11 +121,9 @@ def process_voice_command(command):
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "status": "SUCCESS"
         }
-        
         st.session_state.transactions.append(transaction)
         
         return f"""✅ Transaction Successful!
-        
 💸 Amount: ₹{amount:,.2f}
 👤 To: {recipient}
 🔐 Voice Score: {score:.2f}
@@ -138,7 +134,6 @@ def process_voice_command(command):
 
 # Main App
 def main():
-    # Header
     st.title("🏦 GenAI Voice Banking Assistant")
     st.subheader("🎤 Secure Voice-Activated Banking")
     
@@ -157,8 +152,6 @@ def main():
     
     with col1:
         st.header("🎤 Voice Commands")
-        
-        # Sample commands
         st.info("""
         **Try these commands:**
         • "Send 1000 to John"
@@ -167,18 +160,12 @@ def main():
         • "Show history"
         """)
         
-        # Input
-        voice_command = st.text_input(
-            "🎙️ Voice Command:",
-            placeholder="e.g., Send 500 to John"
-        )
+        voice_command = st.text_input("🎙️ Voice Command:", placeholder="e.g., Send 500 to John")
         
-        # Process button
         if st.button("🎯 Process Command", type="primary"):
             if voice_command:
                 with st.spinner("Processing..."):
                     response = process_voice_command(voice_command)
-                    
                     if "✅" in response:
                         st.success(response)
                     elif "❌" in response:
@@ -190,13 +177,7 @@ def main():
     
     with col2:
         st.header("⚡ Quick Actions")
-        
-        demo_commands = [
-            "Send 500 to John",
-            "Check balance", 
-            "Show history"
-        ]
-        
+        demo_commands = ["Send 500 to John", "Check balance", "Show history"]
         for cmd in demo_commands:
             if st.button(f"🎤 {cmd}", key=cmd):
                 response = process_voice_command(cmd)
@@ -220,7 +201,6 @@ def main():
     if st.button("🔄 Reset Demo"):
         st.session_state.balance = 25000.0
         st.session_state.transactions = []
-        st.rerun()
 
 if __name__ == "__main__":
     main()
